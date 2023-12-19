@@ -216,10 +216,26 @@ static void test_memcg_min(void)
 		     "(A/B/D memory.current=%ld) ~= %d", c[1], MB(17));
 	TST_EXP_EXPR(values_close(c[2], 0, 1),
 		     "(A/B/E memory.current=%ld) ~= 0", c[2]);
+	TST_EXP_EXPR(values_close(c[3], 0, 1),
+		     "(A/B/F memory.current=%ld) ~= 0", c[3]);
 
 	alloc_anon_in_child(trunk_cg[G], MB(170), 1);
 
+	for (i = 0; i < ARRAY_SIZE(leaf_cg); i++)
+		SAFE_CG_SCANF(leaf_cg[i], "memory.current", "%ld", c + i);
+
+	TST_EXP_EXPR(values_close(c[0], MB(33), 20),
+		     "!(A/B/C memory.current=%ld) ~= %d", c[0], MB(33));
+	TST_EXP_EXPR(values_close(c[1], MB(17), 20),
+		     "!(A/B/D memory.current=%ld) ~= %d", c[1], MB(17));
+	TST_EXP_EXPR(values_close(c[2], 0, 1),
+		     "!(A/B/E memory.current=%ld) ~= 0", c[2]);
+	TST_EXP_EXPR(values_close(c[3], 0, 1),
+		     "!(A/B/F memory.current=%ld) ~= 0", c[3]);
+
+
 	SAFE_CG_SCANF(trunk_cg[B], "memory.current", "%ld", c);
+
 	TST_EXP_EXPR(values_close(c[0], MB(50), 5),
 		     "(A/B memory.current=%ld) ~= %d", c[0], MB(50));
 

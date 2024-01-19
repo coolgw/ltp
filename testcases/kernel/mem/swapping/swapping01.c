@@ -59,6 +59,58 @@ static long mem_over_max;
 static pid_t pid;
 static unsigned int start_runtime;
 
+static void ps_print(void)
+{
+    FILE *fp;
+    char buffer[4096];  // Buffer to store the output
+
+    // Open a pipe to run the command and read its output
+    fp = popen("ps aux --sort=-%mem", "r");
+    if (fp == NULL) {
+        perror("popen");
+        return 1;
+    }
+
+    // Read the output and print it
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        /* printf("%s", buffer); */
+	tst_res(TINFO, "%s", buffer);
+    }
+
+    // Close the pipe
+    if (pclose(fp) == -1) {
+        perror("pclose");
+        return 1;
+    }
+}
+
+static void pid_print(int pid)
+{
+    FILE *fp;
+    char buffer[4096];  // Buffer to store the output
+
+    // Open a pipe to run the command and read its output
+    char cmd[128];
+    sprintf(cmd, "cat /proc/%d/status", pid);
+    fp = popen(cmd, "r");
+    if (fp == NULL) {
+        perror("popen");
+        return 1;
+    }
+
+    // Read the output and print it
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        /* printf("%s", buffer); */
+	tst_res(TINFO, "%s", buffer);
+    }
+
+    // Close the pipe
+    if (pclose(fp) == -1) {
+        perror("pclose");
+        return 1;
+    }
+}
+
 static void test_swapping(void)
 {
 	FILE *file;
@@ -79,8 +131,10 @@ static void test_swapping(void)
 
 	switch (pid = SAFE_FORK()) {
 	case 0:
+		ps_print();
 		TST_PRINT_MEMINFO();
 		do_alloc(0);
+		ps_print();
 		TST_PRINT_MEMINFO();
 		do_alloc(1);
 		exit(0);
@@ -148,8 +202,10 @@ static void check_swapping(void)
 	}
 
 	swapped = SAFE_READ_PROC_STATUS(pid, "VmSwap:");
+	pid_print(pid);
+	ps_print();
+	TST_PRINT_MEMINFO();
 	if (swapped > mem_over_max) {
-		TST_PRINT_MEMINFO();
 		kill(pid, SIGCONT);
 		tst_brk(TFAIL, "heavy swapping detected: %ld MB swapped",
 				swapped / 1024);

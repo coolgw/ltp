@@ -205,6 +205,13 @@ static void check_swapping(void)
 	pid_print(pid);
 	ps_print();
 	TST_PRINT_MEMINFO();
+	tst_res(TINFO, "!!!!!!!!sleep!!!!!!!!!!");
+	sleep(1);
+	TST_PRINT_MEMINFO();
+	sleep(2);
+	TST_PRINT_MEMINFO();
+	sleep(5);
+	TST_PRINT_MEMINFO();
 	if (swapped > mem_over_max) {
 		tst_res(TINFO, "!!!!!!!!case failed try check memory again !!!!!!!!!!");
 		sleep(1);

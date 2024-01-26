@@ -65,7 +65,7 @@ static void mem_print(void)
     char buffer[4096];  // Buffer to store the output
 
     // Open a pipe to run the command and read its output
-    fp = popen("for dir in /proc/[0-9][0-9]*;do  pid=${dir##*/};name=`cat $dir/comm`;awk -v name=$name -v pid=$pid '/^Swap/{s+=$2}END{if (s) printf \"\%dK \%s:\%d\\n\", s, name, pid}' $dir/smaps;done | sort -n -k1", "r");
+    fp = popen("for dir in /proc/[0-9][0-9]*;do  pid=${dir##*/};name=`cat $dir/comm`;awk -v name=$name -v pid=$pid '/^Swap:/{s+=$2}END{if (s) printf \"\%dK \%s:\%d\\n\", s, name, pid}' $dir/smaps;done | sort -n -k1", "r");
     if (fp == NULL) {
         perror("popen");
         return 1;
@@ -136,6 +136,12 @@ static void pid_print(int pid)
     }
 }
 
+static void print_summary(void)
+{
+	ps_print();
+	mem_print();
+	TST_PRINT_MEMINFO();
+}
 static void test_swapping(void)
 {
 	FILE *file;
@@ -156,14 +162,7 @@ static void test_swapping(void)
 
 	switch (pid = SAFE_FORK()) {
 	case 0:
-		ps_print();
-		mem_print();
-		TST_PRINT_MEMINFO();
 		do_alloc(0);
-		tst_res(TINFO, "!!!!!before check!!!!!");
-		ps_print();
-		mem_print();
-		TST_PRINT_MEMINFO();
 		do_alloc(1);
 		exit(0);
 	default:
@@ -196,8 +195,11 @@ static void do_alloc(int allow_raise)
 
 	if (allow_raise == 1)
 		tst_res(TINFO, "try to allocate: %ld MB", mem_count / 1024);
+	print_summary();
 	s = SAFE_MALLOC(mem_count * 1024);
+	print_summary();
 	memset(s, 1, mem_count * 1024);
+	print_summary();
 
 	if ((allow_raise == 1) && (raise(SIGSTOP) == -1)) {
 		tst_res(TINFO, "memory allocated: %ld MB", mem_count / 1024);
@@ -230,11 +232,11 @@ static void check_swapping(void)
 	}
 
 	swapped = SAFE_READ_PROC_STATUS(pid, "VmSwap:");
-	tst_res(TINFO, "!!!!!!!!after mem alocate!!!!!!!!!!");
+	/* tst_res(TINFO, "!!!!!!!!after mem alocate!!!!!!!!!!"); */
 	pid_print(pid);
-	ps_print();
-	mem_print();
-	TST_PRINT_MEMINFO();
+	/* ps_print(); */
+	/* mem_print(); */
+	/* TST_PRINT_MEMINFO(); */
 	if (swapped > mem_over_max) {
 		kill(pid, SIGCONT);
 		tst_brk(TFAIL, "heavy swapping detected: %ld MB swapped",

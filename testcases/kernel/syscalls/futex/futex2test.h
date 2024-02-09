@@ -12,8 +12,9 @@
 #include <stdint.h>
 #include "lapi/syscalls.h"
 #include "futextest.h"
+#include "lapi/abisize.h"
 
-#if !defined(__LP64__)
+#ifdef TST_ABI32
 struct timespec64 {
 	int64_t tv_sec;
 	int64_t tv_nsec;
@@ -31,7 +32,7 @@ static inline int futex_waitv(volatile struct futex_waitv *waiters,
 			      unsigned long nr_waiters, unsigned long flags,
 			      struct timespec *timo, clockid_t clockid)
 {
-#if !defined(__LP64__)
+#ifdef TST_ABI32
 	struct timespec64 timo64 = {0};
 
 	timo64.tv_sec = timo->tv_sec;

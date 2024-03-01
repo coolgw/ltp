@@ -13,6 +13,7 @@
 
 #define TST_NO_DEFAULT_MAIN
 #define DEFAULT_MAX_SWAPFILE 32
+#define MAX_LINE_LEN 256
 
 #include "tst_test.h"
 #include "libswap.h"
@@ -274,16 +275,17 @@ int tst_max_swapfiles(void)
 int tst_count_swaps(void)
 {
 	FILE *fp;
-	int used = -1;
-	char c;
+	int used = 0;
 
 	fp = SAFE_FOPEN("/proc/swaps", "r");
 	if (fp == NULL)
 		return -1;
 
-	while ((c = fgetc(fp)) != EOF) {
-		if (c == '\n')
+	char line[MAX_LINE_LEN];
+	while (fgets(line, MAX_LINE_LEN, fp) != NULL) {
+		if (strstr(line, "/dev/") != NULL) {
 			used++;
+		}
 	}
 
 	SAFE_FCLOSE(fp);

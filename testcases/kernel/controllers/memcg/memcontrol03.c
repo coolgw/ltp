@@ -201,6 +201,7 @@ static void test_memcg_min(void)
 		sleep(1);
 	}
 
+	sync();
 	alloc_anon_in_child(trunk_cg[G], MB(148), 0);
 
 	SAFE_CG_SCANF(trunk_cg[B], "memory.current", "%ld", c);
@@ -217,6 +218,7 @@ static void test_memcg_min(void)
 	TST_EXP_EXPR(values_close(c[2], 0, 1),
 		     "(A/B/E memory.current=%ld) ~= 0", c[2]);
 
+	sync();
 	alloc_anon_in_child(trunk_cg[G], MB(170), 1);
 
 	SAFE_CG_SCANF(trunk_cg[B], "memory.current", "%ld", c);

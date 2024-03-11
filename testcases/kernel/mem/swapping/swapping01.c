@@ -59,6 +59,31 @@ static long mem_over_max;
 static pid_t pid;
 static unsigned int start_runtime;
 
+static void vmstat_print(void)
+{
+    FILE *fp;
+    char buffer[4096];  // Buffer to store the output
+
+    // Open a pipe to run the command and read its output
+    fp = popen("cat /proc/vmstat", "r");
+    if (fp == NULL) {
+        perror("popen");
+        return 1;
+    }
+
+    // Read the output and print it
+    tst_res(TINFO, "====/proc/vmstat====");
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        /* printf("%s", buffer); */
+	tst_res(TINFO, "%s", buffer);
+    }
+
+    // Close the pipe
+    if (pclose(fp) == -1) {
+        perror("pclose");
+        return 1;
+    }
+}
 static void mem_print(void)
 {
     FILE *fp;
@@ -140,6 +165,7 @@ static void print_summary(void)
 {
 	ps_print();
 	mem_print();
+	vmstat_print();
 	TST_PRINT_MEMINFO();
 }
 static void test_swapping(void)

@@ -237,6 +237,7 @@ TST_RETRY_FN_EXP_BACKOFF()
 		fi
 
 		if [ $tst_delay -lt $tst_sec ]; then
+			tst_res TPASS "!!!sleep: ${tst_delay} us"
 			tst_sleep ${tst_delay}us
 			tst_delay=$((tst_delay*2))
 		else

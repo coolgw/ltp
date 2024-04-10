@@ -230,17 +230,20 @@ TST_RETRY_FN_EXP_BACKOFF()
 		tst_brk TBROK "TST_RETRY_FN_EXP_BACKOFF: tst_sec must be integer ('$tst_sec')"
 	fi
 
+			tst_res TINFO "!!!in TST_RETRY_FN_EXP_BACKOFF!!!!!!!: "
 	while true; do
 		eval "$tst_fun"
 		if [ "$?" = "$tst_exp" ]; then
 			break
 		fi
 
+			tst_res TINFO "!!!sleep!!!!!!!: "
 		if [ $tst_delay -lt $tst_sec ]; then
-			tst_res TPASS "!!!sleep: ${tst_delay} us"
+			tst_res TINFO "!!!sleep: ${tst_delay} us"
 			tst_sleep ${tst_delay}us
 			tst_delay=$((tst_delay*2))
 		else
+			tst_res TINFO "!!!my change!!!!!!!: "
 			tst_brk TBROK "\"$tst_fun\" timed out"
 		fi
 	done
@@ -254,6 +257,7 @@ TST_RETRY_FUNC()
 		tst_brk TBROK "TST_RETRY_FUNC expects 2 parameters"
 	fi
 
+	#	tst_brk TBROK "TST_RETRY_FUNC expects 2 parameters"
 	TST_RETRY_FN_EXP_BACKOFF "$1" "$2" 1
 	return $2
 }

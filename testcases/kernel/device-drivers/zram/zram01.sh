@@ -68,6 +68,9 @@ initialize_vars()
 
 setup()
 {
+			tst_res TINFO "!!!test begin!!!!!!!: "
+#TST_RETRY_FUNC "echo aaaaaa" 10
+#			tst_res TINFO "!!!test end!!!!!!!: "
 	initialize_vars
 	zram_load
 }

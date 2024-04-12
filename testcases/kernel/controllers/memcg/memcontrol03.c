@@ -144,7 +144,8 @@ static void alloc_pagecache_in_child(const struct tst_cg_group *const cg,
 	tst_res(TINFO, "Child %d in %s: Allocating pagecache: %"PRIdPTR,
 		getpid(), tst_cg_group_name(cg), size);
 	alloc_pagecache(fd, size);
-	SAFE_FSYNC(fd);
+	/* SAFE_FSYNC(fd); */
+	sync();
 
 	TST_CHECKPOINT_WAKE(CHILD_IDLE);
 	TST_CHECKPOINT_WAIT(TEST_DONE);

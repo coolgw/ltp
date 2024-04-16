@@ -1170,8 +1170,35 @@ static void set_ulimit_(const char *file, const int lineno, const struct tst_uli
 	safe_setrlimit(file, lineno, conf->resource, &rlim);
 }
 
+static print_cgroup() {
+    FILE *fp;
+    char path[1035];
+
+    // Open the command for reading
+    fp = popen("mount | grep cgroup", "r");
+    if (fp == NULL) {
+        printf("Failed to run command\n");
+        return 1;
+    }
+
+    // Read the output line by line
+    while (fgets(path, sizeof(path), fp) != NULL) {
+	tst_res(TINFO, "===%s===", path);
+        /* printf("%s", path); */
+    }
+
+    // Close the file pointer
+    pclose(fp);
+
+    return 0;
+}
+
 static void do_setup(int argc, char *argv[])
 {
+	print_cgroup();
+	tst_res(TINFO, "====do_setup drop memory_recursivprot");
+	system("mount -t cgroup2 -oremount,nsdelegate none /sys/fs/cgroup");
+	print_cgroup();
 	char *tdebug_env = getenv("LTP_ENABLE_DEBUG");
 
 	if (!tst_test)

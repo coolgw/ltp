@@ -105,7 +105,7 @@ static void init_meminfo(void)
 static void memset_blocks(char *ptr, int mem_count, int sleep_time_ms) {
 	for (int i = 0; i < mem_count / 1024; i++) {
 		memset(ptr + (i * MEM_SIZE), 1, MEM_SIZE);
-		usleep(sleep_time_ms * 1000);
+		/* usleep(sleep_time_ms * 1000); */
 	}
 }
 

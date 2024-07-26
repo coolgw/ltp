@@ -175,8 +175,8 @@ test6()
 		return 0
 	fi
 
-	mkdir /hugetlb
-	mount -t hugetlbfs none /hugetlb
+	mkdir ${TMPDIR}/hugetlb
+	mount -t hugetlbfs none ${TMPDIR}/hugetlb
 
 	save_nr_hugepages=$(cat /proc/sys/vm/nr_hugepages)
 	echo $((2*$nr_mems)) > /proc/sys/vm/nr_hugepages
@@ -184,8 +184,8 @@ test6()
 	cpuset_memory_test --mmap-file --hugepage -s $HUGEPAGESIZE >"$MEMORY_RESULT" &
 	simple_getresult $! "$CPUSET/0"
 
-	umount /hugetlb
-	rmdir /hugetlb
+	umount ${TMPDIR}/hugetlb
+	rmdir ${TMPDIR}/hugetlb
 
 	echo $save_nr_hugepages > /proc/sys/vm/nr_hugepages
 	if [ $(cat /proc/sys/vm/nr_hugepages) -ne $save_nr_hugepages ]; then
@@ -214,8 +214,8 @@ test7()
 		return 0
 	fi
 
-	mkdir /hugetlb
-	mount -t hugetlbfs none /hugetlb
+	mkdir ${TMPDIR}/hugetlb
+	mount -t hugetlbfs none ${TMPDIR}/hugetlb
 
 	save_nr_hugepages=$(cat /proc/sys/vm/nr_hugepages)
 	echo $((2*$nr_mems)) > /proc/sys/vm/nr_hugepages
@@ -223,8 +223,8 @@ test7()
 	cpuset_memory_test --shm --hugepage -s $HUGEPAGESIZE --key=7 >"$MEMORY_RESULT" &
 	simple_getresult $! "$CPUSET/0"
 
-	umount /hugetlb
-	rmdir /hugetlb
+	umount ${TMPDIR}/hugetlb
+	rmdir ${TMPDIR}/hugetlb
 
 	echo $save_nr_hugepages > /proc/sys/vm/nr_hugepages
 	if [ $(cat /proc/sys/vm/nr_hugepages) -ne $save_nr_hugepages ]; then

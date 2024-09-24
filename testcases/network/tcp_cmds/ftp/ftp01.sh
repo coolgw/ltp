@@ -4,6 +4,7 @@
 # Copyright (c) 2003 Manoj Iyer <manjo@mail.utexas.edu>
 # Copyright (c) 2001 Robbie Williamson <robbiew@us.ibm.com>
 
+TST_SETUP=setup
 TST_TESTFUNC=do_test
 TST_CNT=4
 TST_NEEDS_CMDS='awk ftp'
@@ -11,6 +12,16 @@ TST_NEEDS_TMPDIR=1
 
 RUSER="${RUSER:-root}"
 RHOST="${RHOST:-localhost}"
+FTP_CMD="ftp -nv"
+
+setup()
+{
+    if tst_cmd_available lftp; then
+        FTP_CMD="lftp --norc"
+    else
+        tst_brkm TCONF "No FTP client found"
+    fi
+}
 
 do_test()
 {
@@ -41,7 +52,7 @@ test_get()
             echo cd $TST_NET_DATAROOT
             echo get $file
             echo quit
-        } | ftp -nv $RHOST
+        } | $FTP_CMD $RHOST
 
         sum1="$(ls -l $file | awk '{print $5}')"
         sum2="$(ls -l $TST_NET_DATAROOT/$file | awk '{print $5}')"
@@ -62,7 +73,7 @@ test_put()
             echo cd $TST_TMPDIR
             echo put $file
             echo quit
-        } | ftp -nv $RHOST
+        } | $FTP_CMD $RHOST
 
         sum1="$(tst_rhost_run -c "sum $TST_TMPDIR/$file" -s | awk '{print $1}')"
         sum2="$(sum $TST_NET_DATAROOT/$file | awk '{print $1}')"

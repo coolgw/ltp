@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "cpuset_common.h"
-#include "cpuset_bitmask.h"
+#include "common.h"
+#include "bitmask.h"
 #include "cpuset.h"
-#include "cpuset_meminfo.h"
+#include "meminfo.h"
 
 #define LIST_PRESENT_MEM_FILE	"/sys/devices/system/node/possible"
 #define LIST_ONLINE_MEM_FILE	"/sys/devices/system/node/online"

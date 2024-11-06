@@ -22,11 +22,6 @@
 
 top_srcdir              ?= ../../../../..
 
-LTPLIBS = cpuset_lib
-
 include $(top_srcdir)/include/mk/testcases.mk
 include $(abs_srcdir)/../Makefile.inc
-
-LTPLDLIBS = -lcpu_set
-
 include $(top_srcdir)/include/mk/generic_leaf_target.mk

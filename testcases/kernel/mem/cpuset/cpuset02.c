@@ -18,7 +18,6 @@
 #include <sys/param.h>
 #include <sys/types.h>
 #include "tst_test.h"
-#include "../../controllers/cpuset/cpuset_lib/cpuset.h"
 
 #ifdef HAVE_NUMA_V2
 #include <numa.h>
@@ -44,6 +43,16 @@ static void count_cpus_mems(void)
 		tst_brk(TCONF, "test requires NUMA system");
 }
 
+static int addr2node(void *addr)
+{
+    int node = -1;
+    long ret;
+    ret = get_mempolicy(&node, NULL, 0, addr, MPOL_F_NODE | MPOL_F_ADDR);
+    if (ret < 0)
+        tst_brk(TBROK | TERRNO, "get_mempolicy() failed");
+    return node;
+}
+
 static void touch_memory_and_check_node(char *p, int size)
 {
 	int i;
@@ -52,7 +61,7 @@ static void touch_memory_and_check_node(char *p, int size)
 	for (i = 0; i < size; i += pagesize)
 		p[i] = 0xef;
 
-	if (cpuset_addr2node(p) == 0)
+	if (addr2node(p) == 0)
 		tst_res(TPASS, "check node pass");
 	else
 		tst_res(TFAIL, "check node failed");

@@ -1,0 +1,175 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ * Copyright (c) 2024 Wei Gao <wegao@suse.com>
+ */
+
+/*\
+ * [Description]
+ *
+ * Test PROCMAP_QUERY ioctl() for /proc/$PID/maps.
+ * Test base on kernel selftests proc-pid-vm.c.
+ *
+ * 1. Ioctl with exact match query_addr
+ * 2. Ioctl without match query_addr
+ * 3. Check COVERING_OR_NEXT_VMA query_flags
+ * 4. Check PROCMAP_QUERY_VMA_WRITABLE query_flags
+ * 5. Check vma_name_addr content
+ */
+
+#include "config.h"
+#include <stdlib.h>
+#include <sys/ioctl.h>
+#include <errno.h>
+#include <fnmatch.h>
+#include "tst_test.h"
+#include "tst_safe_stdio.h"
+#include <sys/sysmacros.h>
+
+#ifdef HAVE_STRUCT_PROCMAP_QUERY
+#include <linux/fs.h>
+
+struct map_entry {
+	unsigned long vm_start;
+	unsigned long vm_end;
+	char vm_flags_str[5];
+	unsigned long vm_pgoff;
+	unsigned int vm_major;
+	unsigned int vm_minor;
+	unsigned long vm_inode;
+	char vm_name[256];
+	unsigned int vm_flags;
+};
+
+static unsigned int parse_vm_flags(const char *vm_flags_str)
+{
+	unsigned int flags = 0;
+
+	if (strchr(vm_flags_str, 'r'))
+		flags |= PROCMAP_QUERY_VMA_READABLE;
+	if (strchr(vm_flags_str, 'w'))
+		flags |= PROCMAP_QUERY_VMA_WRITABLE;
+	if (strchr(vm_flags_str, 'x'))
+		flags |= PROCMAP_QUERY_VMA_EXECUTABLE;
+	if (strchr(vm_flags_str, 's'))
+		flags |= PROCMAP_QUERY_VMA_SHARED;
+
+	return flags;
+
+}
+
+static int parse_maps_file(const char *filename, const char *keyword, struct map_entry *entry)
+{
+	FILE *fp = SAFE_FOPEN(filename, "r");
+
+	char line[1024];
+
+	while (fgets(line, sizeof(line), fp) != NULL) {
+		if (fnmatch(keyword, line, 0) == 0) {
+			if (sscanf(line, "%lx-%lx %s %lx %x:%x %lu %s",
+						&entry->vm_start, &entry->vm_end, entry->vm_flags_str,
+						&entry->vm_pgoff, &entry->vm_major, &entry->vm_minor,
+						&entry->vm_inode, entry->vm_name) < 7)
+				return -1;
+
+			entry->vm_flags = parse_vm_flags(entry->vm_flags_str);
+
+			SAFE_FCLOSE(fp);
+			return 0;
+		}
+	}
+
+	SAFE_FCLOSE(fp);
+	return -1;
+}
+
+static void verify_ioctl(void)
+{
+	char path_buf[256];
+	struct procmap_query q;
+	int fd;
+	struct map_entry entry;
+
+	memset(&entry, 0, sizeof(entry));
+
+	snprintf(path_buf, sizeof(path_buf), "/proc/%u/maps", getpid());
+	fd = SAFE_OPEN(path_buf, O_RDONLY);
+
+	TST_EXP_PASS(parse_maps_file(path_buf, "*", &entry));
+
+	/* CASE 1: exact MATCH at query_addr */
+	memset(&q, 0, sizeof(q));
+	q.size = sizeof(q);
+	q.query_addr = (__u64)entry.vm_start;
+	q.query_flags = 0;
+
+	TST_EXP_PASS(ioctl(fd, PROCMAP_QUERY, &q));
+
+	TST_EXP_EQ_LU(q.query_addr, entry.vm_start);
+	TST_EXP_EQ_LU(q.query_flags, 0);
+	TST_EXP_EQ_LU(q.vma_flags, entry.vm_flags);
+	TST_EXP_EQ_LU(q.vma_start, entry.vm_start);
+	TST_EXP_EQ_LU(q.vma_end, entry.vm_end);
+	TST_EXP_EQ_LU(q.vma_page_size, getpagesize());
+	TST_EXP_EQ_LU(q.vma_offset, entry.vm_pgoff);
+	TST_EXP_EQ_LU(q.inode, entry.vm_inode);
+	TST_EXP_EQ_LU(q.dev_major, entry.vm_major);
+	TST_EXP_EQ_LU(q.dev_minor, entry.vm_minor);
+
+	/* CASE 2: NO MATCH at query_addr */
+	memset(&q, 0, sizeof(q));
+	q.size = sizeof(q);
+	q.query_addr = entry.vm_start - 1;
+	q.query_flags = 0;
+
+	TST_EXP_FAIL(ioctl(fd, PROCMAP_QUERY, &q), ENOENT);
+
+	/* CASE 3: MATCH COVERING_OR_NEXT_VMA */
+	memset(&q, 0, sizeof(q));
+	q.size = sizeof(q);
+	q.query_addr = entry.vm_start - 1;
+	q.query_flags = PROCMAP_QUERY_COVERING_OR_NEXT_VMA;
+
+	TST_EXP_PASS(ioctl(fd, PROCMAP_QUERY, &q));
+
+	/* CASE 4: NO MATCH WRITABLE at query_addr */
+	memset(&entry, 0, sizeof(entry));
+	TST_EXP_PASS(parse_maps_file(path_buf, "*r-?p *", &entry));
+
+	memset(&q, 0, sizeof(q));
+	q.size = sizeof(q);
+	q.query_addr = entry.vm_start;
+	q.query_flags = PROCMAP_QUERY_VMA_WRITABLE;
+	TST_EXP_FAIL(ioctl(fd, PROCMAP_QUERY, &q), ENOENT);
+
+	/* CASE 5: check vma_name_addr content */
+	char process_name[256];
+	char pattern[256];
+	char buf[256];
+
+	SAFE_READLINK("/proc/self/exe", process_name, sizeof(process_name));
+	sprintf(pattern, "*%s*", process_name);
+	memset(&entry, 0, sizeof(entry));
+	TST_EXP_PASS(parse_maps_file(path_buf, pattern, &entry));
+
+	memset(&q, 0, sizeof(q));
+	q.size = sizeof(q);
+	q.query_addr = entry.vm_start;
+	q.query_flags = 0;
+	q.vma_name_addr = (__u64)(unsigned long)buf;
+	q.vma_name_size = sizeof(buf);
+
+	TST_EXP_PASS(ioctl(fd, PROCMAP_QUERY, &q));
+	TST_EXP_EQ_LU(q.vma_name_size, strlen(process_name) + 1);
+	TST_EXP_EQ_STR((char *)q.vma_name_addr, process_name);
+
+	SAFE_CLOSE(fd);
+}
+
+static struct tst_test test = {
+	.test_all = verify_ioctl,
+	.needs_root = 1,
+};
+#else
+	TST_TEST_TCONF(
+		"This system does not provide support for ioctl(PROCMAP_QUERY)");
+#endif

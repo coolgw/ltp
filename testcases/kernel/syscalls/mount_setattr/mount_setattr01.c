@@ -96,16 +96,47 @@ static void run(unsigned int n)
 	if (!TST_PASS)
 		goto out1;
 	mount_flag = 1;
-	SAFE_CLOSE(otfd);
 
 	TST_EXP_PASS_SILENT(statvfs(OT_MNTPOINT, &buf), "statvfs sucess");
 	if (!TST_PASS)
 		goto out2;
 
-	if (buf.f_flag & tc->expect_attrs)
-		tst_res(TPASS, "%s is actually set as expected", tc->name);
-	else
-		tst_res(TFAIL, "%s is not actually set as expected", tc->name);
+	TST_EXP_EXPR(buf.f_flag & tc->expect_attrs, "%s set check pass", tc->name);
+
+	SAFE_CLOSE(otfd);
+	SAFE_UMOUNT(OT_MNTPOINT);
+	mount_flag = 0;
+
+	TST_EXP_FD_SILENT(open_tree(AT_FDCWD, MNTPOINT, AT_EMPTY_PATH |
+		AT_SYMLINK_NOFOLLOW | OPEN_TREE_CLOEXEC | OPEN_TREE_CLONE));
+	if (!TST_PASS)
+		return;
+
+	otfd = (int)TST_RET;
+
+	TST_EXP_PASS_SILENT(mount_setattr(otfd, "", AT_EMPTY_PATH, &attr, sizeof(attr)),
+		"%s set", tc->name);
+	if (!TST_PASS)
+		goto out1;
+
+	attr.attr_set &= ~tc->mount_attrs;
+	attr.attr_clr |= tc->mount_attrs;
+	TST_EXP_PASS_SILENT(mount_setattr(otfd, "", AT_EMPTY_PATH, &attr, sizeof(attr)),
+		"%s set", tc->name);
+	if (!TST_PASS)
+		goto out1;
+
+	TST_EXP_PASS_SILENT(move_mount(otfd, "", AT_FDCWD, OT_MNTPOINT, MOVE_MOUNT_F_EMPTY_PATH));
+	if (!TST_PASS)
+		goto out1;
+	mount_flag = 1;
+
+	TST_EXP_PASS_SILENT(statvfs(OT_MNTPOINT, &buf), "statvfs sucess");
+	if (!TST_PASS)
+		goto out2;
+
+	TST_EXP_EXPR(!(buf.f_flag & tc->expect_attrs), "%s clear check pass", tc->name);
+	SAFE_CLOSE(otfd);
 
 	goto out2;
 

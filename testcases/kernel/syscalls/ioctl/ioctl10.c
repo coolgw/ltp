@@ -24,9 +24,10 @@
 #include "tst_test.h"
 #include "tst_safe_stdio.h"
 #include <sys/sysmacros.h>
-
-#ifdef HAVE_STRUCT_PROCMAP_QUERY
 #include <linux/fs.h>
+#include "lapi/ioctl.h"
+
+#define PROC_MAP_PATH "/proc/self/maps"
 
 struct map_entry {
 	unsigned long vm_start;
@@ -57,7 +58,7 @@ static unsigned int parse_vm_flags(const char *vm_flags_str)
 
 }
 
-static int parse_maps_file(const char *filename, const char *keyword, struct map_entry *entry)
+static void parse_maps_file(const char *filename, const char *keyword, struct map_entry *entry)
 {
 	FILE *fp = SAFE_FOPEN(filename, "r");
 
@@ -69,38 +70,43 @@ static int parse_maps_file(const char *filename, const char *keyword, struct map
 						&entry->vm_start, &entry->vm_end, entry->vm_flags_str,
 						&entry->vm_pgoff, &entry->vm_major, &entry->vm_minor,
 						&entry->vm_inode, entry->vm_name) < 7)
-				return -1;
+				tst_brk(TFAIL, "parse maps file /proc/self/maps failed");
 
 			entry->vm_flags = parse_vm_flags(entry->vm_flags_str);
 
 			SAFE_FCLOSE(fp);
-			return 0;
+			return;
 		}
 	}
 
 	SAFE_FCLOSE(fp);
-	return -1;
+	tst_brk(TFAIL, "parse maps file /proc/self/maps failed");
 }
 
 static void verify_ioctl(void)
 {
-	char path_buf[256];
 	struct procmap_query q;
 	int fd;
 	struct map_entry entry;
 
 	memset(&entry, 0, sizeof(entry));
 
-	snprintf(path_buf, sizeof(path_buf), "/proc/%u/maps", getpid());
-	fd = SAFE_OPEN(path_buf, O_RDONLY);
+	fd = SAFE_OPEN("/proc/self/maps", O_RDONLY);
 
-	TST_EXP_PASS(parse_maps_file(path_buf, "*", &entry));
+	parse_maps_file(PROC_MAP_PATH, "*", &entry);
 
 	/* CASE 1: exact MATCH at query_addr */
 	memset(&q, 0, sizeof(q));
 	q.size = sizeof(q);
-	q.query_addr = (__u64)entry.vm_start;
+	q.query_addr = (uint64_t)entry.vm_start;
 	q.query_flags = 0;
+
+	TEST(ioctl(fd, PROCMAP_QUERY, &q));
+
+	if ((TST_RET == -1) && (TST_ERR == ENOTTY))
+		tst_brk(TCONF,
+			"This system does not provide support for ioctl(PROCMAP_QUERY)");
+
 
 	TST_EXP_PASS(ioctl(fd, PROCMAP_QUERY, &q));
 
@@ -133,7 +139,7 @@ static void verify_ioctl(void)
 
 	/* CASE 4: NO MATCH WRITABLE at query_addr */
 	memset(&entry, 0, sizeof(entry));
-	TST_EXP_PASS(parse_maps_file(path_buf, "*r-?p *", &entry));
+	parse_maps_file(PROC_MAP_PATH, "*r-?p *", &entry);
 
 	memset(&q, 0, sizeof(q));
 	q.size = sizeof(q);
@@ -149,13 +155,13 @@ static void verify_ioctl(void)
 	SAFE_READLINK("/proc/self/exe", process_name, sizeof(process_name));
 	sprintf(pattern, "*%s*", process_name);
 	memset(&entry, 0, sizeof(entry));
-	TST_EXP_PASS(parse_maps_file(path_buf, pattern, &entry));
+	parse_maps_file(PROC_MAP_PATH, pattern, &entry);
 
 	memset(&q, 0, sizeof(q));
 	q.size = sizeof(q);
 	q.query_addr = entry.vm_start;
 	q.query_flags = 0;
-	q.vma_name_addr = (__u64)(unsigned long)buf;
+	q.vma_name_addr = (uint64_t)(unsigned long)buf;
 	q.vma_name_size = sizeof(buf);
 
 	TST_EXP_PASS(ioctl(fd, PROCMAP_QUERY, &q));
@@ -169,7 +175,3 @@ static struct tst_test test = {
 	.test_all = verify_ioctl,
 	.needs_root = 1,
 };
-#else
-	TST_TEST_TCONF(
-		"This system does not provide support for ioctl(PROCMAP_QUERY)");
-#endif

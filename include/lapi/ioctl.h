@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include <sys/ioctl.h>
+#include <stdint.h>
 
 /* musl not including it in <sys/ioctl.h> */
 #include <sys/ttydefaults.h>

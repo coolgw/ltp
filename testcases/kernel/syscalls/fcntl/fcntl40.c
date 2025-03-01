@@ -5,46 +5,49 @@
 
 /*\
  * Basic test for fcntl using F_CREATED_QUERY.
+ * Verify if the fcntl() syscall is recognizing whether a file has been
+ * created or not via O_CREAT when O_CLOEXEC is also used.
  *
- * It is based on the following kernel commit:
- * commit d0fe8920cbe42547798fd806f078eeaaba05df18
- * Author: Christian Brauner brauner@kernel.org
- * Date: Wed Jul 24 15:15:36 2024 +0200
+ * Test is based on a kernel selftests.
  */
 
 #include "lapi/fcntl.h"
 #include "tst_test.h"
 
+#define TEST_NAME "LTP_FCNTL_CREATED_QUERY_TEST"
+
 static void verify_fcntl(void)
 {
-	for (int i = 0; i < 101; i++) {
-		int fd;
-		char path[PATH_MAX];
+	int fd;
 
-		fd = SAFE_OPEN("/dev/null", O_RDONLY | O_CLOEXEC);
+	fd = SAFE_OPEN("/dev/null", O_RDONLY | O_CLOEXEC);
 
-		/* We didn't create "/dev/null". */
-		TST_EXP_EQ_LI(fcntl(fd, F_CREATED_QUERY, 0), 0);
-		close(fd);
+	/* We didn't create "/dev/null". */
+	SAFE_FCNTL(fd, F_CREATED_QUERY, 0);
+	SAFE_CLOSE(fd);
 
-		sprintf(path, "aaaa_%d", i);
-		fd = SAFE_OPEN(path, O_CREAT | O_RDONLY | O_CLOEXEC, 0600);
+	fd = SAFE_OPEN(TEST_NAME, O_CREAT | O_RDONLY | O_CLOEXEC, 0600);
 
-		/* We created "aaaa_%d". */
-		TST_EXP_EQ_LI(fcntl(fd, F_CREATED_QUERY, 0), 1);
-		close(fd);
+	/* We created "aaaa_%d". */
+	SAFE_FCNTL(fd, F_CREATED_QUERY, 0);
+	SAFE_CLOSE(fd);
 
-		fd = SAFE_OPEN(path, O_RDONLY | O_CLOEXEC);
+	fd = SAFE_OPEN(TEST_NAME, O_RDONLY | O_CLOEXEC);
 
-		/* We're opening it again, so no positive creation check. */
-		TST_EXP_EQ_LI(fcntl(fd, F_CREATED_QUERY, 0), 0);
-		close(fd);
-		unlink(path);
-	}
+	/* We're opening it again, so no positive creation check. */
+	SAFE_FCNTL(fd, F_CREATED_QUERY, 0);
+	SAFE_CLOSE(fd);
+	SAFE_UNLINK(TEST_NAME);
+
+	tst_res(TPASS, "fcntl F_CREATED_QUERY check pass");
 }
 
 static struct tst_test test = {
 	.test_all = verify_fcntl,
 	.needs_tmpdir = 1,
 	.min_kver = "6.12",
+	.tags = (const struct tst_tag[]) {
+		{"linux-git", "d0fe8920cbe4"},
+		{}
+	}
 };

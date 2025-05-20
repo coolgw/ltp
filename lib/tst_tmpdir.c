@@ -102,6 +102,7 @@ static char test_start_work_dir[PATH_MAX];
 extern futex_t *tst_futexes;
 
 static int rmobj(const char *obj, char **errmsg);
+static int rmobjat(int dir_fd, const char *obj, char **errmsg);
 
 int tst_tmpdir_created(void)
 {
@@ -149,8 +150,8 @@ static int purge_dir(const char *path, char **errptr)
 	int ret_val = 0;
 	DIR *dir;
 	struct dirent *dir_ent;
-	char dirobj[PATH_MAX];
 	static char err_msg[PATH_MAX + 1280];
+	int dir_fd = -1;
 
 	/* Do NOT perform the request if the directory is "/" */
 	if (!strcmp(path, "/")) {
@@ -175,6 +176,18 @@ static int purge_dir(const char *path, char **errptr)
 		return -1;
 	}
 
+	dir_fd = dirfd(dir);
+	if (dir_fd == -1) {
+		closedir(dir);
+		if (errptr) {
+			sprintf(err_msg,
+				"Cannot get file descriptor for directory %s; errno=%d: %s",
+				path, errno, tst_strerrno(errno));
+			*errptr = err_msg;
+		}
+		return -1;
+	}
+
 	/* Loop through the entries in the directory, removing each one */
 	for (dir_ent = readdir(dir); dir_ent; dir_ent = readdir(dir)) {
 		/* Don't remove "." or ".." */
@@ -183,8 +196,57 @@ static int purge_dir(const char *path, char **errptr)
 			continue;
 
 		/* Recursively remove the current entry */
-		sprintf(dirobj, "%s/%s", path, dir_ent->d_name);
-		if (rmobj(dirobj, errptr) != 0)
+		if (rmobjat(dir_fd, dir_ent->d_name, errptr) != 0)
+			ret_val = -1;
+	}
+
+	closedir(dir);
+	return ret_val;
+}
+
+static int purge_dirat(int dir_fd, const char *path, char **errptr)
+{
+	int ret_val = 0;
+	DIR *dir;
+	struct dirent *dir_ent;
+	static char err_msg[PATH_MAX + 1280];
+	int subdir_fd;
+
+	errno = 0;
+
+	/* Open the subdirectory using openat */
+	subdir_fd = openat(dir_fd, path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	if (subdir_fd < 0) {
+		if (errptr) {
+			snprintf(err_msg, sizeof(err_msg),
+				 "Cannot open subdirectory %s (via fd %d); errno=%d: %s",
+				 path, dir_fd, errno, tst_strerrno(errno));
+			*errptr = err_msg;
+		}
+		return -1;
+	}
+
+	dir = fdopendir(subdir_fd);
+	if (!dir) {
+		if (errptr) {
+			snprintf(err_msg, sizeof(err_msg),
+				 "Cannot open directory stream for %s (via fd %d); errno=%d: %s",
+				 path, dir_fd, errno, tst_strerrno(errno));
+			*errptr = err_msg;
+		}
+		close(subdir_fd);
+		return -1;
+	}
+
+	/* Loop through the entries in the directory, removing each one */
+	for (dir_ent = readdir(dir); dir_ent; dir_ent = readdir(dir)) {
+		/* Don't remove "." or ".." */
+		if (!strcmp(dir_ent->d_name, ".")
+		    || !strcmp(dir_ent->d_name, ".."))
+			continue;
+
+		/* Recursively remove the current entry */
+		if (rmobjat(subdir_fd, dir_ent->d_name, errptr) != 0)
 			ret_val = -1;
 	}
 
@@ -249,6 +311,73 @@ static int rmobj(const char *obj, char **errmsg)
 			if (errmsg != NULL) {
 				sprintf(err_msg,
 					"unlink(%s) failed; errno=%d: %s", obj,
+					errno, tst_strerrno(errno));
+				*errmsg = err_msg;
+			}
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int rmobjat(int dir_fd, const char *obj, char **errmsg)
+{
+	int ret_val = 0;
+	struct stat statbuf;
+	static char err_msg[PATH_MAX + 1280];
+	int fd;
+
+	fd = openat(dir_fd, obj, O_DIRECTORY | O_NOFOLLOW);
+	if (fd >= 0) {
+		close(fd);
+		ret_val = purge_dirat(dir_fd, obj, errmsg);
+
+		/* If there were problems removing an entry, don't attempt to
+		   remove the directory itself */
+		if (ret_val == -1)
+			return -1;
+
+		/* Get the link count, now that all the entries have been removed */
+		if (fstat(dir_fd, &statbuf) < 0) {
+			if (errmsg != NULL) {
+				sprintf(err_msg,
+					"fstat(%s) failed; errno=%d: %s", obj,
+					errno, tst_strerrno(errno));
+				*errmsg = err_msg;
+			}
+			return -1;
+		}
+
+		/* Remove the directory itself */
+		if (statbuf.st_nlink >= 3) {
+			/* The directory is linked; unlink() must be used */
+			if (unlinkat(dir_fd, obj, 0) < 0) {
+				if (errmsg != NULL) {
+					sprintf(err_msg,
+						"unlinkat(%s) failed; errno=%d: %s",
+						obj, errno, tst_strerrno(errno));
+					*errmsg = err_msg;
+				}
+				return -1;
+			}
+		} else {
+			/* The directory is not linked; use unlinkat with AT_REMOVEDIR */
+			if (unlinkat(dir_fd, obj, AT_REMOVEDIR) < 0) {
+				if (errmsg != NULL) {
+					sprintf(err_msg,
+						"remove(%s) failed; errno=%d: %s",
+						obj, errno, tst_strerrno(errno));
+					*errmsg = err_msg;
+				}
+				return -1;
+			}
+		}
+	} else {
+		if (unlinkat(dir_fd, obj, 0) < 0) {
+			if (errmsg != NULL) {
+				sprintf(err_msg,
+					"unlinkat(%s) failed; errno=%d: %s", obj,
 					errno, tst_strerrno(errno));
 				*errmsg = err_msg;
 			}

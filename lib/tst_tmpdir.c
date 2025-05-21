@@ -338,40 +338,15 @@ static int rmobjat(int dir_fd, const char *obj, char **errmsg)
 		if (ret_val == -1)
 			return -1;
 
-		/* Get the link count, now that all the entries have been removed */
-		if (fstat(dir_fd, &statbuf) < 0) {
+		/* The directory is not linked; use unlinkat with AT_REMOVEDIR */
+		if (unlinkat(dir_fd, obj, AT_REMOVEDIR) < 0) {
 			if (errmsg != NULL) {
 				sprintf(err_msg,
-					"fstat(%s) failed; errno=%d: %s", obj,
-					errno, tst_strerrno(errno));
+						"remove(%s) failed; errno=%d: %s",
+						obj, errno, tst_strerrno(errno));
 				*errmsg = err_msg;
 			}
 			return -1;
-		}
-
-		/* Remove the directory itself */
-		if (statbuf.st_nlink >= 3) {
-			/* The directory is linked; unlink() must be used */
-			if (unlinkat(dir_fd, obj, 0) < 0) {
-				if (errmsg != NULL) {
-					sprintf(err_msg,
-						"unlinkat(%s) failed; errno=%d: %s",
-						obj, errno, tst_strerrno(errno));
-					*errmsg = err_msg;
-				}
-				return -1;
-			}
-		} else {
-			/* The directory is not linked; use unlinkat with AT_REMOVEDIR */
-			if (unlinkat(dir_fd, obj, AT_REMOVEDIR) < 0) {
-				if (errmsg != NULL) {
-					sprintf(err_msg,
-						"remove(%s) failed; errno=%d: %s",
-						obj, errno, tst_strerrno(errno));
-					*errmsg = err_msg;
-				}
-				return -1;
-			}
 		}
 	} else {
 		if (unlinkat(dir_fd, obj, 0) < 0) {

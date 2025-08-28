@@ -35,6 +35,7 @@ int tst_umount(const char *path);
 int tst_is_mounted(const char *path);
 int tst_is_mounted_ro(const char *path);
 int tst_is_mounted_rw(const char *path);
+int tst_mount_has_opt(const char *path, const char *opt);
 int tst_is_mounted_at_tmpdir(const char *path);
 
 /*

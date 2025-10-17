@@ -14,9 +14,12 @@
 #include <poll.h>
 #include <pthread.h>
 
+#include "config.h"
 #include "tst_test.h"
 #include "tst_safe_pthread.h"
 #include "lapi/userfaultfd.h"
+
+#if HAVE_DECL_MREMAP_DONTUNMAP
 
 static int page_size;
 static int uffd;
@@ -119,11 +122,7 @@ static void run(void)
 	SAFE_PTHREAD_CREATE(&handler_thread, NULL,
 		(void * (*)(void *))fault_handler_thread, NULL);
 
-#if HAVE_DECL_MREMAP_DONTUNMAP
 	new_remap_addr = mremap(fault_addr, page_size, page_size, MREMAP_DONTUNMAP | MREMAP_MAYMOVE);
-#else
-	tst_brk(TCONF, "System not supported MREMAP_DONTUNMAP");
-#endif
 
 	if (new_remap_addr == MAP_FAILED)
 		tst_brk(TBROK | TTERRNO, "mremap failed");
@@ -157,3 +156,7 @@ static struct tst_test test = {
 	},
 	.min_kver = "5.7",
 };
+
+#else
+TST_TEST_TCONF("Missing MREMAP_DONTUNMAP in <linux/mman.h>");
+#endif

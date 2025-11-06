@@ -16,8 +16,8 @@ static void do_test(void)
 
 static struct tst_test test = {
 	.test_all = do_test,
-	.needs_cmds = (struct tst_cmd[]) {
-		{.cmd = "mkfs.ext45 >= 1.43.0"},
-		{}
+	.needs_cmds = (const char *[]) {
+		"mkfs.ext45 >= 1.43.0",
+		NULL
 	}
 };

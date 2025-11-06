@@ -223,9 +223,9 @@ static struct tst_test test = {
 		{}
 	},
 	.mntpoint = MNTPOINT,
-	.needs_cmds = (struct tst_cmd[]) {
-		{.cmd = "quotacheck"},
-		{}
+	.needs_cmds = (const char *const []) {
+		"quotacheck",
+		NULL
 	},
 	.setup = setup,
 	.cleanup = cleanup,

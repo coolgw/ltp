@@ -7,7 +7,7 @@
 # {
 #  "needs_cmds": [
 #   {
-#    "cmd": "mkfs.ext4 >= 1.0.0",
+#    "cmd": "ls",
 #    "optional": 1
 #   }
 #  ]

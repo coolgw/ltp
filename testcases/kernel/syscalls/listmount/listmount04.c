@@ -18,6 +18,7 @@
 #include "lapi/mount.h"
 #include "lapi/syscalls.h"
 
+#ifdef HAVE_STRUCT_MNT_ID_REQ_MNT_NS_FD
 #define MNT_SIZE 32
 
 static struct mnt_id_req *request;
@@ -26,7 +27,7 @@ static uint64_t mnt_ids[MNT_SIZE];
 static struct tcase {
 	int req_usage;
 	uint32_t size;
-	uint32_t spare;
+	uint32_t mnt_ns_fd;
 	uint64_t mnt_id;
 	uint64_t param;
 	uint64_t *mnt_ids;
@@ -73,12 +74,12 @@ static struct tcase {
 	{
 		.req_usage = 1,
 		.size = MNT_ID_REQ_SIZE_VER0,
-		.spare = -1,
+		.mnt_ns_fd = -1,
 		.mnt_id = LSMT_ROOT,
 		.mnt_ids = mnt_ids,
 		.nr_mnt_ids = MNT_SIZE,
-		.exp_errno = EINVAL,
-		.msg = "invalid mnt_id_req.spare",
+		.exp_errno = EBADF,
+		.msg = "invalid mnt_id_req.mnt_ns_fd bad file descriptor",
 	},
 	{
 		.req_usage = 1,
@@ -122,7 +123,7 @@ static void run(unsigned int n)
 		req->mnt_id = tc->mnt_id;
 		req->param = tc->param;
 		req->size = tc->size;
-		req->spare = tc->spare;
+		req->mnt_ns_fd = tc->mnt_ns_fd;
 	}
 
 	TST_EXP_FAIL(tst_syscall(__NR_listmount, req, tc->mnt_ids,
@@ -133,9 +134,14 @@ static void run(unsigned int n)
 static struct tst_test test = {
 	.test = run,
 	.tcnt = ARRAY_SIZE(tcases),
-	.min_kver = "6.8",
+	.min_kver = "6.18",
 	.bufs = (struct tst_buffers []) {
 		{ &request, .size = MNT_ID_REQ_SIZE_VER0 },
 		{},
 	},
 };
+
+#else
+	TST_TEST_TCONF(
+		"This system does not support mnt_id_req.mnt_ns_fd.");
+#endif /* HAVE_STRUCT_MNT_ID_REQ_MNT_NS_FD */

@@ -10,20 +10,19 @@
  * resource (empty pipe) fails immediately with -EAGAIN.
  */
 
-#include <linux/aio_abi.h>
-
 #include "config.h"
 #include "tst_test.h"
 #include "lapi/syscalls.h"
+#include "lapi/aio_abi.h"
 
 static int fd[2];
 static char buf[100];
 
 static aio_context_t ctx;
-static struct iocb iocb;
-static struct iocb *iocbs[] = {&iocb};
+static iocb cb;
+static iocb *iocbs[] = {&cb};
 
-static inline void io_prep_option(struct iocb *cb, int fd, void *buf,
+static inline void io_prep_option(iocb *cb, int fd, void *buf,
 			size_t count, long long offset, unsigned int opcode)
 {
 	memset(cb, 0, sizeof(*cb));
@@ -39,7 +38,7 @@ static void setup(void)
 {
 	TST_EXP_PASS_SILENT(tst_syscall(__NR_io_setup, 1, &ctx));
 	SAFE_PIPE(fd);
-	io_prep_option(&iocb, fd[0], buf, sizeof(buf), 0, IOCB_CMD_PREAD);
+	io_prep_option(&cb, fd[0], buf, sizeof(buf), 0, IOCB_CMD_PREAD);
 }
 
 static void cleanup(void)

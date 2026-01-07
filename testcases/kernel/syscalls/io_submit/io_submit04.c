@@ -4,10 +4,10 @@
  */
 
 /*\
- * Test iocb RWF_* flags support: RWF_NOWAIT
- *
- * Checks if an asynchronous read operation with RWF_NOWAIT on a blocking
- * resource (empty pipe) fails immediately with -EAGAIN.
+ * Test RWF_NOWAIT support in io_submit(), verifying that an
+ * asynchronous read operation on a blocking resource (empty pipe)
+ * will cause -EAGAIN. This is done by checking that io_getevents()
+ * syscall returns immediately and io_event.res is equal to -EAGAIN.
  */
 
 #include "config.h"
@@ -15,30 +15,29 @@
 #include "lapi/syscalls.h"
 #include "lapi/aio_abi.h"
 
+
+#define BUF_SIZE 100
+
 static int fd[2];
-static char buf[100];
 
 static aio_context_t ctx;
-static iocb cb;
-static iocb *iocbs[] = {&cb};
-
-static inline void io_prep_option(iocb *cb, int fd, void *buf,
-			size_t count, long long offset, unsigned int opcode)
-{
-	memset(cb, 0, sizeof(*cb));
-	cb->aio_fildes = fd;
-	cb->aio_lio_opcode = opcode;
-	cb->aio_buf = (uint64_t)buf;
-	cb->aio_offset = offset;
-	cb->aio_nbytes = count;
-	cb->aio_rw_flags = RWF_NOWAIT;
-}
+static char *buf;
+static iocb *cb;
+static iocb **iocbs;
 
 static void setup(void)
 {
 	TST_EXP_PASS_SILENT(tst_syscall(__NR_io_setup, 1, &ctx));
 	SAFE_PIPE(fd);
-	io_prep_option(&cb, fd[0], buf, sizeof(buf), 0, IOCB_CMD_PREAD);
+
+	cb->aio_fildes = fd[0];
+	cb->aio_lio_opcode = IOCB_CMD_PREAD;
+	cb->aio_buf = (uint64_t)buf;
+	cb->aio_offset = 0;
+	cb->aio_nbytes = BUF_SIZE;
+	cb->aio_rw_flags = RWF_NOWAIT;
+
+	iocbs[0] = cb;
 }
 
 static void cleanup(void)
@@ -49,8 +48,9 @@ static void cleanup(void)
 	if (fd[1])
 		SAFE_CLOSE(fd[1]);
 
-	if (tst_syscall(__NR_io_destroy, ctx))
-		tst_brk(TBROK | TERRNO, "io_destroy() failed");
+	if (ctx)
+		if (tst_syscall(__NR_io_destroy, ctx))
+			tst_brk(TBROK | TERRNO, "io_destroy() failed");
 }
 
 static void run(void)
@@ -61,26 +61,34 @@ static void run(void)
 
 	TEST(tst_syscall(__NR_io_submit, ctx, nr, iocbs));
 
-	if (TST_RET == nr)
-		tst_res(TPASS, "io_submit() pass");
-	else
-		tst_res(TFAIL | TTERRNO, "io_submit() returns %ld, expected %ld", TST_RET, nr);
+	if (TST_RET == -1 && errno == EOPNOTSUPP) {
+		tst_brk(TCONF, "RWF_NOWAIT not supported by kernel");
+	} else if (TST_RET != nr) {
+		tst_brk(TBROK | TTERRNO, "io_submit() returns %ld, expected %ld",
+				TST_RET, nr);
+	}
 
 	tst_syscall(__NR_io_getevents, ctx, 1, 1, &evbuf, &timeout);
 
 	if (evbuf.res == -EAGAIN)
-		tst_res(TINFO, "io_submit RWF_NOWAIT flag check pass");
+		tst_res(TPASS, "io_getevents() returned EAGAIN on read event");
 	else
-		tst_res(TFAIL | TTERRNO, "io_submit expect EAGAIN, but get %s", strerror(-evbuf.res));
-
+		tst_res(TFAIL | TTERRNO, "io_getevents() returned with %s instead of EAGAIN",
+			strerror(-evbuf.res));
 }
 
 static struct tst_test test = {
 	.test_all = run,
+	.setup = setup,
+	.cleanup = cleanup,
 	.needs_kconfigs = (const char *[]) {
 		"CONFIG_AIO=y",
 		NULL
 	},
-	.setup = setup,
-	.cleanup = cleanup,
+	.bufs = (struct tst_buffers []) {
+		{&buf, .size = BUF_SIZE},
+		{&cb, .size = sizeof(iocb)},
+		{&iocbs, .size = sizeof(iocb *)},
+		{},
+	}
 };

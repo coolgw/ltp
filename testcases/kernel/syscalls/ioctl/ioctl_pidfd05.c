@@ -36,7 +36,7 @@ static void run(void)
 	info_invalid->dummy = 1;
 
 	args->flags = CLONE_PIDFD | CLONE_NEWUSER | CLONE_NEWPID;
-	args->pidfd = (uint64_t)&pidfd;
+	args->pidfd = (uint64_t)(uintptr_t)&pidfd;
 	args->exit_signal = SIGCHLD;
 
 	pid_child = SAFE_CLONE(args);

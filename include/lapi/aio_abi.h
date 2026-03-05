@@ -13,28 +13,32 @@
 # define RWF_NOWAIT 0x00000008
 #endif
 
-#ifndef HAVE_STRUCT_IOCB_AIO_RW_FLAGS
-struct iocb {
-	uint64_t aio_data;
+struct iocb_fallback {
+        uint64_t aio_data;
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-	uint32_t aio_key;
-	uint32_t aio_rw_flags;
+        uint32_t   aio_key;
+        uint32_t aio_rw_flags;
 #elif __BYTE_ORDER == __BIG_ENDIAN
-	uint32_t aio_rw_flags;
-	uint32_t aio_key;
+        uint32_t aio_rw_flags;
+        uint32_t   aio_key;
 #else
-# error edit for your odd byteorder.
+#error edit for your odd byteorder.
 #endif
-	uint16_t aio_lio_opcode;
-	int16_t  aio_reqprio;
-	uint32_t aio_fildes;
-	uint64_t aio_buf;
-	uint64_t aio_nbytes;
-	int64_t  aio_offset;
-	uint64_t aio_reserved2;
-	uint32_t aio_flags;
-	uint32_t aio_resfd;
+        uint16_t   aio_lio_opcode;
+        int16_t   aio_reqprio;
+        uint32_t   aio_fildes;
+        uint64_t   aio_buf;
+        uint64_t   aio_nbytes;
+        int64_t   aio_offset;
+        uint64_t   aio_reserved2;
+        uint32_t   aio_flags;
+        uint32_t   aio_resfd;
 };
+
+#ifndef HAVE_STRUCT_IOCB_AIO_RW_FLAGS
+typedef struct iocb_fallback iocb;
+#else
+typedef struct iocb iocb;
 #endif
 
 #endif /* LAPI_AIO_ABI_H__ */

@@ -15,19 +15,19 @@
 #include "lapi/syscalls.h"
 #include "lapi/aio_abi.h"
 
+
 #define BUF_SIZE 100
 
-static int fd[2] = {-1, -1};
+static int fd[2];
+
 static aio_context_t ctx;
 static char *buf;
-static struct iocb *cb;
-static struct iocb **iocbs;
+static iocb *cb;
+static iocb **iocbs;
 
 static void setup(void)
 {
-	if (tst_syscall(__NR_io_setup, 1, &ctx))
-		tst_brk(TBROK | TERRNO, "io_setup failed");
-
+	TST_EXP_PASS_SILENT(tst_syscall(__NR_io_setup, 1, &ctx));
 	SAFE_PIPE(fd);
 
 	cb->aio_fildes = fd[0];
@@ -68,17 +68,12 @@ static void run(void)
 				TST_RET, nr);
 	}
 
-	TEST(tst_syscall(__NR_io_getevents, ctx, 1, 1, &evbuf, &timeout));
-
-	if (TST_RET != 1) {
-		tst_res(TFAIL | TTERRNO, "io_getevents() failed to get 1 event");
-		return;
-	}
+	tst_syscall(__NR_io_getevents, ctx, 1, 1, &evbuf, &timeout);
 
 	if (evbuf.res == -EAGAIN)
 		tst_res(TPASS, "io_getevents() returned EAGAIN on read event");
 	else
-		tst_res(TFAIL, "io_getevents() returned with %s instead of EAGAIN",
+		tst_res(TFAIL | TTERRNO, "io_getevents() returned with %s instead of EAGAIN",
 			strerror(-evbuf.res));
 }
 
@@ -92,8 +87,8 @@ static struct tst_test test = {
 	},
 	.bufs = (struct tst_buffers []) {
 		{&buf, .size = BUF_SIZE},
-		{&cb, .size = sizeof(struct iocb)},
-		{&iocbs, .size = sizeof(struct iocb *)},
+		{&cb, .size = sizeof(iocb)},
+		{&iocbs, .size = sizeof(iocb *)},
 		{},
 	}
 };

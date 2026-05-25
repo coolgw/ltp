@@ -11,20 +11,29 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/un.h>
 #include <netinet/in.h>
+#include <pwd.h>
 #include "tst_test.h"
 #include "lapi/syscalls.h"
+
+#define SOCK_FILE "sock_file"
 
 static int fd_invalid = -1;
 static int fd_socket;
 static int fd_null;
 static int fd_connected;
 static int fd_server;
+static int fd_unix_dgram;
+static int fd_unix_stream;
+static int fd_unix_server;
 
 static struct sockaddr_in sock1;
 static struct sockaddr_in sock2;
 static struct sockaddr_in sock3;
+static struct sockaddr_un sock4;
 static void *bad_addr;
+static struct passwd *pw;
 
 static pid_t pid;
 
@@ -49,6 +58,10 @@ static struct test_case_t {
 		"connect on a socket found no one listening on remote address"},
 	{&fd_socket, &sock3, sizeof(sock3), EAFNOSUPPORT,
 		"address doesn't have the correct address family in sa_family"},
+	{&fd_unix_dgram, &sock4, sizeof(sock4), EPROTOTYPE,
+		"socket type does not support the protocol"},
+	{&fd_unix_stream, &sock4, sizeof(sock4), EACCES,
+		"write permission is denied on the socket file"},
 };
 
 static int sys_connect(int sockfd, const struct sockaddr *addr,
@@ -103,6 +116,19 @@ static void setup(void)
 	sock3.sin_family = 47;
 	sock3.sin_port = 0;
 	sock3.sin_addr.s_addr = htonl(0x0AFFFEFD);
+
+	sock4.sun_family = AF_UNIX;
+	strncpy(sock4.sun_path, SOCK_FILE, sizeof(sock4.sun_path));
+
+	fd_unix_server = SAFE_SOCKET(AF_UNIX, SOCK_STREAM, 0);
+	SAFE_BIND(fd_unix_server, (struct sockaddr *)&sock4, sizeof(sock4));
+	SAFE_CHMOD(SOCK_FILE, 0700);
+	SAFE_LISTEN(fd_unix_server, 5);
+
+	fd_unix_dgram = SAFE_SOCKET(AF_UNIX, SOCK_DGRAM, 0);
+	fd_unix_stream = SAFE_SOCKET(AF_UNIX, SOCK_STREAM, 0);
+
+	pw = SAFE_GETPWNAM("nobody");
 }
 
 static void cleanup(void)
@@ -113,6 +139,12 @@ static void cleanup(void)
 		SAFE_CLOSE(fd_null);
 	if (fd_connected > 0)
 		SAFE_CLOSE(fd_connected);
+	if (fd_unix_dgram > 0)
+		SAFE_CLOSE(fd_unix_dgram);
+	if (fd_unix_stream > 0)
+		SAFE_CLOSE(fd_unix_stream);
+	if (fd_unix_server > 0)
+		SAFE_CLOSE(fd_unix_server);
 
 	if (pid > 0) {
 		SAFE_KILL(pid, SIGKILL);
@@ -125,8 +157,17 @@ static void verify_connect(unsigned int i)
 	struct test_case_t *tc = &tcases[i];
 	void *addr = tc->addr ? tc->addr : bad_addr;
 
-	TST_EXP_FAIL(sys_connect(*tc->fd, addr, tc->salen),
-		tc->exp_errno, "%s", tc->desc);
+	if (tc->exp_errno == EACCES) {
+		if (!SAFE_FORK()) {
+			SAFE_SETUID(pw->pw_uid);
+			TST_EXP_FAIL(sys_connect(*tc->fd, addr, tc->salen),
+				tc->exp_errno, "%s", tc->desc);
+			exit(0);
+		}
+	} else {
+		TST_EXP_FAIL(sys_connect(*tc->fd, addr, tc->salen),
+			tc->exp_errno, "%s", tc->desc);
+	}
 }
 
 static struct tst_test test = {
@@ -135,4 +176,6 @@ static struct tst_test test = {
 	.tcnt = ARRAY_SIZE(tcases),
 	.test = verify_connect,
 	.forks_child = 1,
+	.needs_root = 1,
+	.needs_tmpdir = 1,
 };

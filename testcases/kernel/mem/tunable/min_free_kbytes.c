@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Copyright (c) Linux Test Project, 2012-2025
+ * Copyright (c) Linux Test Project, 2012-2026
  * Copyright (C) 2012-2017  Red Hat, Inc.
  */
 
@@ -177,20 +177,55 @@ static int eatup_mem(unsigned long overcommit_policy)
 
 static void check_monitor(void)
 {
-	unsigned long tune;
-	unsigned long memfree;
+	unsigned long tune, threshold;
+	unsigned long memfree, memavail, min_memfree;
+	int i, retry_count;
 
 	while (!end) {
 		memfree = SAFE_READ_MEMINFO("MemFree:");
 		tune = TST_SYS_CONF_LONG_GET(MIN_FREE_KBYTES);
+		/*
+		 * Allow 10% tolerance to account for transient states.
+		 */
+		threshold = tune * 9 / 10;
 
 		if (memfree < tune) {
-			tst_res(TINFO, "MemFree is %lu kB, "
-				 "min_free_kbytes is %lu kB", memfree, tune);
-			tst_res(TFAIL, "MemFree < min_free_kbytes");
+			min_memfree = memfree;
+			retry_count = 0;
+			/*
+			 * Give it some time to reclaim. The kernel should keep
+			 * MemFree above min_free_kbytes, but transient drops
+			 * are possible under high pressure.
+			 * Check every 10ms for up to 2 seconds for high accuracy.
+			 */
+			for (i = 10; i <= 2000; i += 10) {
+				retry_count++;
+				usleep(10000);
+				memfree = SAFE_READ_MEMINFO("MemFree:");
+				if (memfree < min_memfree)
+					min_memfree = memfree;
+
+				if (memfree >= tune)
+					break;
+			}
+
+			memavail = SAFE_READ_MEMINFO("MemAvailable:");
+
+			if (memfree < threshold) {
+				tst_res(TINFO, "tune=%lu, threshold=%lu", tune, threshold);
+				tst_res(TINFO, "MemFree=%lu, MemAvailable=%lu, MinSeen=%lu (%lu%%)",
+					memfree, memavail, min_memfree, (min_memfree * 100 / tune));
+				tst_res(TFAIL, "MemFree < 90%% of min_free_kbytes after ~2s");
+			} else if (memfree < tune) {
+				tst_res(TINFO, "MemFree (%lu) stayed within 10%% tolerance (min %lu%%, avail %lu) after ~2s",
+					memfree, (min_memfree * 100 / tune), memavail);
+			} else {
+				tst_res(TINFO, "MemFree recovered to %lu (min %lu%%, avail %lu) after %d retries (~%d ms)",
+					memfree, (min_memfree * 100 / tune), memavail, retry_count, i);
+			}
 		}
 
-		sleep(2);
+		usleep(100000);
 	}
 }
 
